@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Jira Image Previewer
 // @namespace    http://tampermonkey.net/
-// @version      2024-07-04
+// @version      2024-07-30
 // @description  It is better to preview the image in Jira
 // @author       Max Gao
 // @match        https://jira.bytesforce-cd.com/**
