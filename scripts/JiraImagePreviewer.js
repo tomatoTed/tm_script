@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Jira Image Previewer
 // @namespace    http://tampermonkey.net/
-// @version      2024-07-30
+// @version      2024-08-22
 // @description  It is better to preview the image in Jira
 // @author       Max Gao
 // @match        https://jira.bytesforce-cd.com/**
@@ -33,12 +33,14 @@ function showClearImg(){
         if($a.length==0) {
             // 没有preview
             let id = iSrc.match(/\d+/)
-            $img.wrap(`<a id="${id}_thumb" href="${iSrc}" title="add-ons" file-preview-type="image" file-preview-id="${id}" file-preview-title="add-ons" resolved=""></a>`)
+            $img.wrap(`<a id="${id}_thumb" href="${iSrc}" title="Jira Image Previewer" file-preview-type="image" file-preview-id="${id}" file-preview-title="add-ons" resolved=""></a>`)
+            $img.removeAttr("hight")
         } else {
             // 有preview
             let aSrc = $a.attr("href");
             if(iSrc!=aSrc){
                 $img.attr("src",aSrc);
+                $img.removeAttr("hight")
             }
         }
     });
