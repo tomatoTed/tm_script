@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Jira Image Previewer
 // @namespace    http://tampermonkey.net/
-// @version      2024-08-22
+// @version      2024-08-22.2
 // @description  It is better to preview the image in Jira
 // @author       Max Gao
 // @match        https://jira.bytesforce-cd.com/**
@@ -10,7 +10,7 @@
 // @grant        GM_addStyle
 // ==/UserScript==
 
-scriptlog=function(log){
+let scriptlog = function(log){
     console.log("userscript: " + log)
 }
 let timer;
