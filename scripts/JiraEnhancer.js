@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         Jira Enhancer
 // @namespace    http://tampermonkey.net/
-// @version      2024-09-06.1
-// @description  It is provide some tools to enhance the features for Jira
-// @author       Max Gao
+// @version      2025-03-10.1
+// @description  It provides some tools to enhance the features of Jira.
+// @author       Max
 // @match        https://jira.bytesforce-cd.com/**
 // @require      https://cdn.bootcss.com/jquery/3.4.1/jquery.min.js
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=bytesforce-cd.com
