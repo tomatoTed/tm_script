@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Sync to Jira
 // @namespace    http://tampermonkey.net/
-// @version      2025-08-27.5
+// @version      2025-08-29.2
 // @description  Sync the Jira or DevOps to Bytesforce Jira
 // @author       Max
 // @match        https://dev.azure.com/eminsco/**
@@ -11,10 +11,6 @@
 // @grant        GM_openInTab
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
-// @grant        GM_notification
-// @grant        GM_setValue
-// @grant        GM_getValue
-// @grant        GM_listValues
 // @connect      jira.bytesforce-cd.com
 // @updateURL    https://raw.githubusercontent.com/tomatoTed/tm_script/main/scripts/sync2Jira.js
 
@@ -49,6 +45,10 @@ function getDevopsData(){
     let description = $(`div.work-item-form-control-content`).text()
     let idAndType = $(`div.work-item-form-header`).find("a.no-underline-link").text()
     let arr = idAndType.split(" ")
+    if(arr.length<2){
+        alert("the idAndType is incorrect "+idAndType)
+        return
+    }
     let id = arr[1]
     let type = arr[0]
 
@@ -138,11 +138,17 @@ function getFormToken(){
                 GM_openInTab("https://jira.bytesforce-cd.com/login.jsp", {active: true, insert: true, setParent:true})
                 return
             }
-            let resp = JSON.parse(res.responseText);
-            const asignee = resp.fields.find((item) => item.id =="assignee")
-            let ownerId=asignee.editHtml.match(/(?<=ownerId=)(.*?)(?=&)/g)[0]
-            setting.formToken=resp.formToken
-            setting.atl_token=resp.atl_token
+            let respJson = JSON.parse(res.responseText);
+            let ownerId="max.gao"
+
+            let asignee = respJson.fields.find((item) => item.id =="assignee")
+            let owner=asignee.editHtml.match(/(?<=ownerId=)(.*?)(?=&)/g)
+            if (owner!=null && owner.length>0){
+                ownerId=owner[0]
+            }
+
+            setting.formToken=respJson.formToken
+            setting.atl_token=respJson.atl_token
             setting.ownerId=ownerId
             GM_log("update the setting",setting)
 
@@ -162,14 +168,14 @@ function sync2BF() {
         },
         onload: function (res) {
             GM_log("response of creation",res.responseText)
-            var resp = JSON.parse(res.responseText)
-            if (!resp.issueKey){
+            var respJson = JSON.parse(res.responseText)
+            if (!respJson.issueKey){
                 alert("sync failed")
                 return
             }
-            GM_log("sync to Jira success",res.issueKey)
-            GM_log("https://jira.bytesforce-cd.com/browse/"+res.issueKey)
-            alert("sync success "+res.issueKey)
+            GM_log("sync to Jira success",respJson.issueKey)
+            GM_log("https://jira.bytesforce-cd.com/browse/"+respJson.issueKey)
+            alert("sync success "+respJson.issueKey)
         }
     });
 
