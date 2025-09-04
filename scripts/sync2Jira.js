@@ -1,11 +1,12 @@
 // ==UserScript==
 // @name         Sync to Jira
 // @namespace    http://tampermonkey.net/
-// @version      2025-08-29.2
+// @version      2025-09-04.7
 // @description  Sync the Jira or DevOps to Bytesforce Jira
 // @author       Max
 // @match        https://dev.azure.com/eminsco/**
 // @require      https://code.jquery.com/jquery-3.4.1.min.js
+// @require      https://cdn.jsdelivr.net/npm/moment@2.30.1/moment.min.js
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=bytesforce-cd.com
 // @grant        GM_log
 // @grant        GM_openInTab
@@ -15,7 +16,10 @@
 // @updateURL    https://raw.githubusercontent.com/tomatoTed/tm_script/main/scripts/sync2Jira.js
 
 // ==/UserScript==
-
+//1 重复检验
+//2 auto set due date - done
+//3 button control
+//4 description enhancement
 
 const setting={
     formToken:"",
@@ -42,39 +46,134 @@ function addCss() {
  */
 function getDevopsData(){
     let summary = $(`div.work-item-title-textfield`).find("input").val()
-    let description = $(`div.work-item-form-control-content`).text()
+    let description = $(`div.work-item-form-first-section`).text()
     let idAndType = $(`div.work-item-form-header`).find("a.no-underline-link").text()
     let arr = idAndType.split(" ")
     if(arr.length<2){
         alert("the idAndType is incorrect "+idAndType)
         return
     }
-    let id = arr[1]
+    let externalKey = arr[1]
     let type = arr[0]
 
-    let issueType="10002"
+    let bfIssueType="10002"
     if ("BUG"==type){
-       issueType = "10205"
+       bfIssueType = "10205"
     }
+    let rawData = {
+        "rawType":type,
+        "externalKey":externalKey,
+        "description":description,
+        "summary":summary,
+        "bfIssueType":bfIssueType
+    }
+    return rawData
+}
+
+function getRawData(){
+    //devops
+    return getDevopsData()
+}
+
+
+function showSyncButton() {
+    if($("#bfSyncButton").attr("type")=="button"){
+        return
+    }
+    $("div.project-header  div[role='menubar']").prepend(`<button type="button" id="bfSyncButton">Sync to BF</button>`)
+    $("#bfSyncButton").on("click",function(){
+        getFormToken()
+    })
+
+}
+function getFormToken(){
+    GM_xmlhttpRequest({
+        url: "https://jira.bytesforce-cd.com/secure/QuickCreateIssue!default.jspa?decorator=none",
+        method: "POST",
+        headers: {
+            "Content-type": "application/x-www-form-urlencoded"
+        },
+        onload: function (res) {
+            if(res.status!=200){
+                GM_log("login failed",res)
+                GM_openInTab("https://jira.bytesforce-cd.com/login.jsp", {active: true, insert: true, setParent:true})
+                return
+            }
+            let respJson = JSON.parse(res.responseText);
+            let ownerId="max.gao"
+
+            let asignee = respJson.fields.find((item) => item.id =="assignee")
+            let owner=asignee.editHtml.match(/(?<=reporter=)(.*?)(?=&)/g)
+            if (owner!=null && owner.length>0){
+                ownerId=owner[0]
+            }
+
+            setting.formToken=respJson.formToken
+            setting.atl_token=respJson.atl_token
+            setting.ownerId=ownerId
+            GM_log("update the setting",setting)
+            sync2BF()
+        }
+    });
+}
+
+function queryDuplicate() {
+    let rawData = getRawData()
+
+    let reqData = {
+        "startIndex": "0", 
+        "layoutKey": "list-view",
+        "jql": `project = EIC AND "External Ticket No" ~ "${rawData.externalKey}"`
+    }
+    let reqString = (new URLSearchParams(reqData)).toString();
+    GM_log("check duplicate string",reqString)
+
+    GM_xmlhttpRequest({
+        url: "https://jira.bytesforce-cd.com/rest/issueNav/1/issueTable",
+        method: "POST",
+        data: reqString,
+        headers: {
+            "Content-type": "application/x-www-form-urlencoded",
+            "x-atlassian-token":"no-check"
+        },
+        onload: function (res) {
+            if(res.status!=200){
+                GM_log("login failed",res)
+                GM_openInTab("https://jira.bytesforce-cd.com/login.jsp", {active: true, insert: true, setParent:true})
+                return
+            }
+            GM_log("response of checking duplication",res.responseText)
+            var respJson = JSON.parse(res.responseText)
+            if (respJson.issueTable.issueKeys!=null||respJson.issueTable.issueKeys.length>0){
+                alert("the external key "+rawData.externalKey +" has already existed")
+                return
+            }
+            getFormToken()
+        }
+    });
+
+}
+function sync2BF() {
+    let rawData = getRawData()
     let reqData = {
         "pid": "13000", // project id, 13000-EIC
-        "issuetype": issueType, // 10205-UAT
+        "issuetype": rawData.bfIssueType, // 10205-UAT
         "atl_token": setting.atl_token,
         "formToken": setting.formToken,
-        "summary": summary,
+        "summary": rawData.summary,
         "priority": "3", // mediumm
-        "customfield_10406": id, //external ticket number
+        "customfield_10406": rawData.externalKey, //external ticket number
         "customfield_12000": "",
         "reporter": setting.ownerId,
         "assignee": "-1", // -1 is null
         "customfield_12203": "",
         "customfield_12202":"12804", //OP必填 运维支撑类型，128804-内部支撑
-        "duedate": "15/Aug/25",
+        "duedate": moment().weekday(5).format('D/MMM/YY'),//下个周五
         "customfield_10105": "",
-        "description": description,
+        "description": rawData.description,
         "dnd-dropzone": "",
         "customfield_12100": "",
-        "customfield_10106": "2", // story point
+        "customfield_10106": "1", // story point
         "issuelinks": "issuelinks",
         "issuelinks-linktype": "relates to",
         "customfield_11700": "",
@@ -109,56 +208,8 @@ function getDevopsData(){
             "components"
         ]
     }
-    let queryString = (new URLSearchParams(reqData)).toString();
-    GM_log("sync query string",queryString)
-    return queryString
-}
-
-
-function showSyncButton() {
-    if($("#bfSyncButton").attr("type")=="button"){
-        return
-    }
-    $("div.project-header  div[role='menubar']").prepend(`<button type="button" id="bfSyncButton">Sync to BF</button>`)
-    $("#bfSyncButton").on("click",function(){
-        getFormToken()
-    })
-
-}
-function getFormToken(){
-    GM_xmlhttpRequest({
-        url: "https://jira.bytesforce-cd.com/secure/QuickCreateIssue!default.jspa?decorator=none",
-        method: "POST",
-        headers: {
-            "Content-type": "application/x-www-form-urlencoded"
-        },
-        onload: function (res) {
-            if(res.status!=200){
-                GM_log("login failed",res)
-                GM_openInTab("https://jira.bytesforce-cd.com/login.jsp", {active: true, insert: true, setParent:true})
-                return
-            }
-            let respJson = JSON.parse(res.responseText);
-            let ownerId="max.gao"
-
-            let asignee = respJson.fields.find((item) => item.id =="assignee")
-            let owner=asignee.editHtml.match(/(?<=ownerId=)(.*?)(?=&)/g)
-            if (owner!=null && owner.length>0){
-                ownerId=owner[0]
-            }
-
-            setting.formToken=respJson.formToken
-            setting.atl_token=respJson.atl_token
-            setting.ownerId=ownerId
-            GM_log("update the setting",setting)
-
-            sync2BF()
-
-        }
-    });
-}
-function sync2BF() {
-    let reqString = getDevopsData()
+    let reqString = (new URLSearchParams(reqData)).toString();
+    GM_log("sync query string",reqString)
     GM_xmlhttpRequest({
         url: "https://jira.bytesforce-cd.com/secure/QuickCreateIssue.jspa?decorator=none",
         method: "POST",
