@@ -1,12 +1,13 @@
 // ==UserScript==
 // @name         Sync to Jira
 // @namespace    http://tampermonkey.net/
-// @version      2025-09-04.7
+// @version      2025-01-09.03
 // @description  Sync the Jira or DevOps to Bytesforce Jira
 // @author       Max
 // @match        https://dev.azure.com/eminsco/**
 // @require      https://code.jquery.com/jquery-3.4.1.min.js
 // @require      https://cdn.jsdelivr.net/npm/moment@2.30.1/moment.min.js
+// @require      https://unpkg.com/turndown/dist/turndown.js
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=bytesforce-cd.com
 // @grant        GM_log
 // @grant        GM_openInTab
@@ -26,6 +27,13 @@ const setting={
     atl_token:"",
     ownerId:""
 }
+const turndownService = new TurndownService({
+  headingStyle: 'atx', // or 'setext'
+  hr: '\r\n',
+  bulletListMarker: '#', // or '*', '+'
+  codeBlockStyle: 'fenced', // or 'indented'
+  emDelimiter: '_', // or '*'
+});
 
 function addCss() {
     GM_addStyle("#bfSyncButton{background-color:rgba(0,120,212,1); color:#fff;}");
@@ -39,14 +47,15 @@ function addCss() {
  * 10100-Bug
  * 10009-Epic
  * 10300-Adhoc Request
- * 
+ *
  * customfield_11800(Initiated By)
  * 12300-Internal
  * 12301-External
  */
 function getDevopsData(){
+    //summary
     let summary = $(`div.work-item-title-textfield`).find("input").val()
-    let description = $(`div.work-item-form-first-section`).text()
+    //id and type
     let idAndType = $(`div.work-item-form-header`).find("a.no-underline-link").text()
     let arr = idAndType.split(" ")
     if(arr.length<2){
@@ -60,6 +69,19 @@ function getDevopsData(){
     if ("BUG"==type){
        bfIssueType = "10205"
     }
+
+    //description
+    let description = ""
+    $(`div.rooster-editor`).each(function(index, element) {
+        let label  = $(element).attr("aria-label")
+        if(label == "Repro Steps"||label == "System Info"||label == "Description" ||label == "Impact Analysis"){
+            let content = turndownService.turndown($(element).html())
+            if(content != ""){
+                description = description + "h1. " + label + "\r\n" + content + "\r\n"
+            }
+        }
+    });
+
     let rawData = {
         "rawType":type,
         "externalKey":externalKey,
@@ -75,6 +97,16 @@ function getRawData(){
     return getDevopsData()
 }
 
+function getImageBinary(url) {
+
+    let byteArray
+    fetch(url)
+    .then(response => response.arrayBuffer())
+    .then(arrayBuffer => {
+        byteArray = new Uint8Array(arrayBuffer);
+    })
+    .catch(error => console.error('Error fetching image:', error));
+}
 
 function showSyncButton() {
     if($("#bfSyncButton").attr("type")=="button"){
@@ -121,7 +153,7 @@ function queryDuplicate() {
     let rawData = getRawData()
 
     let reqData = {
-        "startIndex": "0", 
+        "startIndex": "0",
         "layoutKey": "list-view",
         "jql": `project = EIC AND "External Ticket No" ~ "${rawData.externalKey}"`
     }
@@ -238,14 +270,7 @@ function run() {
 
 (function () {
     'use strict';
-    // let weburl = location.href;
-    // if (weburl.indexOf("jira.bytesforce-cd.com") == -1) {
-    //     return
-    // }
-
     addCss()
-    // addCssForSprint()
-
 
     $(document).ready(function () {
         GM_log('start running');
